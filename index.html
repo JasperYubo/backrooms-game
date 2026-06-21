@@ -231,9 +231,23 @@ function buildScene(){
   const cMat=new THREE.MeshStandardMaterial({map:ceilTex(),roughness:1.0,metalness:0.0});
   const baseMat=new THREE.MeshStandardMaterial({color:0x3a2810,roughness:0.9});
   maze=genMaze(MW,MH);
-  // Floor & Ceiling (box for thickness)
+  // Floor (box for thickness)
+  const flGeo=new THREE.BoxGeometry(MW*CELL,0.08,MH*CELL);
   const fl=new THREE.Mesh(flGeo,fMat);fl.position.set(MW*CELL/2,-0.04,MH*CELL/2);fl.receiveShadow=true;scene.add(fl);
-  const ce=new THREE.Mesh(ceGeo,cMat);ce.position.set(MW*CELL/2,WALL_H+0.125,MH*CELL/2);ce.receiveShadow=true;scene.add(ce);
+  // Ceiling: individual tiles with frame + random missing
+  const cFrameMat=new THREE.MeshStandardMaterial({color:0x2a2a20,roughness:1.0,metalness:0});
+  const tileSize=1.2;const tilePad=0.04;
+  for(let tz=0;tz<MH*CELL;tz+=tileSize){for(let tx=0;tx<MW*CELL;tx+=tileSize){
+    if(Math.random()<0.05)continue;// missing tile
+    const tile=new THREE.Mesh(new THREE.BoxGeometry(tileSize-tilePad,0.02,tileSize-tilePad),cMat);
+    tile.position.set(tx+tileSize/2,WALL_H-0.01,tz+tileSize/2);tile.receiveShadow=true;scene.add(tile);
+  }}
+  // Ceiling frame grid
+  for(let tz=0;tz<=MH*CELL;tz+=tileSize){const fH=new THREE.Mesh(new THREE.BoxGeometry(MW*CELL,0.03,tilePad),cFrameMat);fH.position.set(MW*CELL/2,WALL_H,tz);scene.add(fH)}
+  for(let tx=0;tx<=MW*CELL;tx+=tileSize){const fV=new THREE.Mesh(new THREE.BoxGeometry(tilePad,0.03,MH*CELL),cFrameMat);fV.position.set(tx,WALL_H,MH*CELL/2);scene.add(fV)}
+  // Ceiling backing
+  const ceGeo=new THREE.BoxGeometry(MW*CELL,0.2,MH*CELL);
+  const ce=new THREE.Mesh(ceGeo,cMat);ce.position.set(MW*CELL/2,WALL_H+0.1,MH*CELL/2);ce.receiveShadow=true;scene.add(ce);
   // Walls (box, only N+W per cell + boundary S+E)
   const wGeoH=new THREE.BoxGeometry(CELL,WALL_H,WALL_THICK);
   const wGeoV=new THREE.BoxGeometry(WALL_THICK,WALL_H,CELL);
