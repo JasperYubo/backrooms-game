@@ -128,30 +128,36 @@ function bfsNext(fromX,fromZ,toX,toZ){
   return{x:cur[0]*CELL+CELL/2,z:cur[1]*CELL+CELL/2};
 }
 
-// ─── Minimap ───
+// ─── Minimap (fog of war: only show visited cells) ───
+const visited=Array.from({length:MH},()=>Array(MW).fill(false));
 function drawMinimap(){
+  // Mark current cell as visited
+  const pcx=Math.floor(playerPos.x/CELL),pcz=Math.floor(playerPos.z/CELL);
+  if(pcx>=0&&pcx<MW&&pcz>=0&&pcz<MH)visited[pcz][pcx]=true;
+  // Also reveal adjacent cells
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=pcx+dx,nz=pcz+dy;if(nx>=0&&nx<MW&&nz>=0&&nz<MH)visited[nz][nx]=true}
   const S=140,cs=S/MW;
-  mmapCtx.fillStyle='rgba(0,0,0,0.85)';mmapCtx.fillRect(0,0,S,S);
-  mmapCtx.strokeStyle='rgba(201,180,88,0.3)';mmapCtx.lineWidth=1;
+  mmapCtx.fillStyle='rgba(0,0,0,0.9)';mmapCtx.fillRect(0,0,S,S);
+  mmapCtx.strokeStyle='rgba(201,180,88,0.35)';mmapCtx.lineWidth=1;
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
+    if(!visited[y][x])continue; // fog of war
     const c=maze[y][x];
     if(c.n){mmapCtx.beginPath();mmapCtx.moveTo(x*cs,y*cs);mmapCtx.lineTo((x+1)*cs,y*cs);mmapCtx.stroke()}
     if(c.w){mmapCtx.beginPath();mmapCtx.moveTo(x*cs,y*cs);mmapCtx.lineTo(x*cs,(y+1)*cs);mmapCtx.stroke()}
-    if(c.s&&y===MH-1){mmapCtx.beginPath();mmapCtx.moveTo(x*cs,(y+1)*cs);mmapCtx.lineTo((x+1)*cs,(y+1)*cs);mmapCtx.stroke()}
-    if(c.e&&x===MW-1){mmapCtx.beginPath();mmapCtx.moveTo((x+1)*cs,y*cs);mmapCtx.lineTo((x+1)*cs,(y+1)*cs);mmapCtx.stroke()}
+    if(c.s){mmapCtx.beginPath();mmapCtx.moveTo(x*cs,(y+1)*cs);mmapCtx.lineTo((x+1)*cs,(y+1)*cs);mmapCtx.stroke()}
+    if(c.e){mmapCtx.beginPath();mmapCtx.moveTo((x+1)*cs,y*cs);mmapCtx.lineTo((x+1)*cs,(y+1)*cs);mmapCtx.stroke()}
+    // Floor tint for visited
+    mmapCtx.fillStyle='rgba(201,180,88,0.04)';mmapCtx.fillRect(x*cs,y*cs,cs,cs);
   }
-  // Exit (yellow)
-  const ex=(MW-1)*cs+cs/2,ez=(MH-1)*cs+cs/2;
-  mmapCtx.fillStyle='#c9b458';mmapCtx.fillRect(ex-3,ez-3,6,6);
-  // Entities (red dots)
+  // Entities (red dots, only if in visited area)
   mmapCtx.fillStyle='#ff2200';
-  for(const e of entities){const mx=e.x/CELL*cs,mz=e.z/CELL*cs;mmapCtx.beginPath();mmapCtx.arc(mx,mz,2.5,0,Math.PI*2);mmapCtx.fill()}
-  // Player (green dot + direction)
+  for(const e of entities){const ex=Math.floor(e.x/CELL),ez=Math.floor(e.z/CELL);if(ex>=0&&ex<MW&&ez>=0&&ez<MH&&visited[ez][ex]){const mx=e.x/CELL*cs,mz=e.z/CELL*cs;mmapCtx.beginPath();mmapCtx.arc(mx,mz,2.5,0,Math.PI*2);mmapCtx.fill()}}
+  // Exit (yellow, only if visited)
+  if(visited[MH-1][MW-1]){const ex2=(MW-1)*cs+cs/2,ez2=(MH-1)*cs+cs/2;mmapCtx.fillStyle='#c9b458';mmapCtx.fillRect(ex2-3,ez2-3,6,6)}
+  // Player (green)
   const px2=playerPos.x/CELL*cs,pz=playerPos.z/CELL*cs;
   mmapCtx.fillStyle='#44ff44';mmapCtx.beginPath();mmapCtx.arc(px2,pz,3,0,Math.PI*2);mmapCtx.fill();
-  // Direction indicator
-  mmapCtx.strokeStyle='#44ff44';mmapCtx.lineWidth=1.5;mmapCtx.beginPath();
-  mmapCtx.moveTo(px2,pz);mmapCtx.lineTo(px2+Math.sin(yaw)*8,pz+Math.cos(yaw)*8);mmapCtx.stroke();
+  mmapCtx.strokeStyle='#44ff44';mmapCtx.lineWidth=1.5;mmapCtx.beginPath();mmapCtx.moveTo(px2,pz);mmapCtx.lineTo(px2+Math.sin(yaw)*8,pz+Math.cos(yaw)*8);mmapCtx.stroke();
 }
 
 // ─── Textures ───
@@ -181,7 +187,7 @@ function ceilTex(){return mkTex((ctx,S)=>{
 // ─── Build Scene ───
 function buildScene(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0804);
-  scene.fog=new THREE.FogExp2(0x0a0804,0.05);
+  scene.fog=new THREE.FogExp2(0x0a0804,0.035);
   const wMat=new THREE.MeshStandardMaterial({map:wallTex(),roughness:0.88});
   const fMat=new THREE.MeshStandardMaterial({map:floorTex(),roughness:0.95});
   const cMat=new THREE.MeshStandardMaterial({map:ceilTex(),roughness:0.9});
@@ -203,17 +209,17 @@ function buildScene(){
     if(x===MW-1&&c.e){const w=new THREE.Mesh(wGeoV,wMat);w.position.set((x+1)*CELL,WALL_H/2,cz);scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set((x+1)*CELL-WALL_THICK/2-0.025,0.05,cz);scene.add(b)}
   }
   // Ambient (very low, Level 0 style)
-  scene.add(new THREE.AmbientLight(0xc9a840,0.03));
+  scene.add(new THREE.AmbientLight(0xc9a840,0.08));
   // Fluorescent tube lights (Level 0 style: long tubes recessed in ceiling)
   flickerLights=[];
   const tubeGeo=new THREE.BoxGeometry(2.0,0.04,0.08);
   const recessGeo=new THREE.BoxGeometry(2.2,0.06,0.25);
   const recessMat=new THREE.MeshStandardMaterial({color:0x1a1a15,roughness:1});
-  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){
+  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){if((x+y)%2!==0)continue;
     const lx=x*CELL+CELL/2,lz=y*CELL+CELL/2;
     const isBroken=Math.random()<0.1;
     const isDim=Math.random()<0.15;
-    const baseI=isBroken?0:isDim?0.5:1.6;
+    const baseI=isBroken?0:isDim?0.8:2.2;
     const flickRate=isBroken?0:isDim?0.025:0.005+Math.random()*0.008;
     // Recess in ceiling
     const recess=new THREE.Mesh(recessGeo,recessMat);recess.position.set(lx,WALL_H+0.02,lz);scene.add(recess);
@@ -223,7 +229,7 @@ function buildScene(){
     const tube=new THREE.Mesh(tubeGeo,tubeMat);tube.position.set(lx,WALL_H-0.01,lz);scene.add(tube);
     // Light (yellow-green tint like real fluorescent)
     const lightColor=0xf5e8b0;
-    const pl=new THREE.PointLight(lightColor,baseI,CELL*2.5,2);pl.position.set(lx,WALL_H-0.08,lz);scene.add(pl);
+    const pl=new THREE.PointLight(lightColor,baseI,CELL*3,1.8);pl.position.set(lx,WALL_H-0.08,lz);scene.add(pl);
     flickerLights.push({light:pl,tube,base:baseI,rate:flickRate,broken:isBroken});
   }
   // Exit: door + EXIT sign
@@ -342,7 +348,7 @@ function init3D(){
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,60);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.75;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
   renderer.outputEncoding=THREE.sRGBEncoding;
   clock=new THREE.Clock();buildScene();setupPost();
   addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)});
