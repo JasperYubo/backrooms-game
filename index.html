@@ -295,7 +295,7 @@ function ceilTex(){return mkTex((ctx,S)=>{
 // ─── Build Scene ───
 function buildScene(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0804);
-  scene.fog=new THREE.FogExp2(0x0a0804,0.025);
+  scene.fog=new THREE.FogExp2(0x0a0804,0.018);
   const texLoader=new THREE.TextureLoader();
   const R2='https://pub-fab801f03e7340d58a03b0eb8ccf2914.r2.dev/backrooms-assets/';
   const wallColor=texLoader.load(R2+'Wallpaper001A_1K-JPG_Color.jpg');
@@ -343,7 +343,7 @@ function buildScene(){
     if(x===MW-1&&c.e){const w=new THREE.Mesh(wGeoV,wMat);w.position.set((x+1)*CELL,WALL_H/2,cz);scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set((x+1)*CELL-WALL_THICK/2-0.025,0.05,cz);scene.add(b)}
   }
   // Ambient (very low, Level 0 style)
-  scene.add(new THREE.AmbientLight(0xc9a840,0.06));
+  scene.add(new THREE.AmbientLight(0xc9a840,0.15));
   // Fluorescent tube lights (Level 0 style: long tubes recessed in ceiling)
   flickerLights=[];
   const tubeGeo=new THREE.BoxGeometry(2.0,0.04,0.08);
@@ -355,7 +355,7 @@ function buildScene(){
   for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){
     // Check if in a light zone
     let inZone=false;for(const z of lightZones)if(Math.hypot(x-z.x,y-z.y)<z.r)inZone=true;
-    if(!inZone&&Math.random()<0.4)continue;// 40% chance no light outside zones
+    if(!inZone&&Math.random()<0.15)continue;// 15% chance no light outside zones
     if(inZone&&Math.random()<0.12)continue;// 12% missing even in lit zones
     const lx=x*CELL+CELL/2,lz=y*CELL+CELL/2;
     const isBroken=Math.random()<0.1;
@@ -532,7 +532,7 @@ function init3D(){
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,60);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   clock=new THREE.Clock();buildScene();setupPost();
