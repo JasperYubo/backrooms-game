@@ -95,18 +95,44 @@ const mmapCtx=mmapCanvas.getContext('2d');
 const CELL=4.5,WALL_H=2.8,WALL_THICK=0.25,MW=16,MH=16;
 const MOVE_SPD=3.5,RUN_SPD=6,M_SENS=0.002;
 
-// ─── Maze ───
+// ─── Maze (with big rooms, L/T shapes, long corridors) ───
 function genMaze(w,h){
   const g=Array.from({length:h},()=>Array.from({length:w},()=>({n:1,s:1,e:1,w:1,v:false})));
+  // Step 1: DFS base maze
   const st=[];g[0][0].v=true;st.push([0,0]);
   while(st.length){const[x,y]=st[st.length-1];const nb=[];
     if(y>0&&!g[y-1][x].v)nb.push([x,y-1,'n','s']);if(y<h-1&&!g[y+1][x].v)nb.push([x,y+1,'s','n']);
     if(x<w-1&&!g[y][x+1].v)nb.push([x+1,y,'e','w']);if(x>0&&!g[y][x-1].v)nb.push([x-1,y,'w','e']);
     if(nb.length){const[nx,ny,d1,d2]=nb[Math.floor(Math.random()*nb.length)];g[y][x][d1]=0;g[ny][nx][d2]=0;g[ny][nx].v=true;st.push([nx,ny])}else st.pop()}
-  for(let i=0;i<Math.floor(w*h*0.18);i++){const rx=Math.floor(Math.random()*w),ry=Math.floor(Math.random()*h);
+  // Step 2: Extra passages for openness
+  for(let i=0;i<Math.floor(w*h*0.15);i++){const rx=Math.floor(Math.random()*w),ry=Math.floor(Math.random()*h);
     const ds=['n','s','e','w'],d=ds[Math.floor(Math.random()*4)],op={n:'s',s:'n',e:'w',w:'e'};
-    const nx=d==='e'?rx+1:d==='w'?rx-1:rx,ny=d==='s'?ry+1:d==='n'?ry-1:ry;
-    if(nx>=0&&nx<w&&ny>=0&&ny<h){g[ry][rx][d]=0;g[ny][nx][op[d]]=0}}
+    const nx2=d==='e'?rx+1:d==='w'?rx-1:rx,ny2=d==='s'?ry+1:d==='n'?ry-1:ry;
+    if(nx2>=0&&nx2<w&&ny2>=0&&ny2<h){g[ry][rx][d]=0;g[ny2][nx2][op[d]]=0}}
+  // Step 3: Carve big rooms (3x3, 4x3, 4x4)
+  const roomCount=3+Math.floor(Math.random()*3);
+  for(let r=0;r<roomCount;r++){
+    const rw=3+Math.floor(Math.random()*2),rh=3+Math.floor(Math.random()*2);
+    const rx=1+Math.floor(Math.random()*(w-rw-1)),ry=1+Math.floor(Math.random()*(h-rh-1));
+    for(let dy=0;dy<rh;dy++)for(let dx=0;dx<rw;dx++){
+      const cx=rx+dx,cy=ry+dy;
+      if(cx<w-1){g[cy][cx].e=0;g[cy][cx+1].w=0}
+      if(cy<h-1){g[cy][cx].s=0;g[cy+1][cx].n=0}
+    }
+  }
+  // Step 4: Carve long corridors (horizontal and vertical)
+  const corrCount=2+Math.floor(Math.random()*2);
+  for(let c=0;c<corrCount;c++){
+    if(Math.random()>0.5){// horizontal
+      const cy=1+Math.floor(Math.random()*(h-2)),sx=Math.floor(Math.random()*(w-6));
+      const len=5+Math.floor(Math.random()*6);
+      for(let i=0;i<len&&sx+i<w-1;i++){g[cy][sx+i].e=0;g[cy][sx+i+1].w=0}
+    }else{// vertical
+      const cx=1+Math.floor(Math.random()*(w-2)),sy=Math.floor(Math.random()*(h-6));
+      const len=5+Math.floor(Math.random()*6);
+      for(let i=0;i<len&&sy+i<h-1;i++){g[sy+i][cx].s=0;g[sy+i+1][cx].n=0}
+    }
+  }
   return g;
 }
 
@@ -215,7 +241,7 @@ function buildScene(){
   const bGeoV=new THREE.BoxGeometry(0.05,0.1,CELL);
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
     const c=maze[y][x],cx2=x*CELL+CELL/2,cz=y*CELL+CELL/2;
-    if(c.n){const w=new THREE.Mesh(wGeoH,wMat);w.position.set(cx2,WALL_H/2,y*CELL);w.castShadow=true;w.receiveShadow=true;scene.add(w);const b=new THREE.Mesh(bGeoH,baseMat);b.position.set(cx2,0.05,y*CELL+WALL_THICK/2+0.025);scene.add(b);const b2=b.clone();b2.position.z=y*CELL-WALL_THICK/2-0.025;scene.add(b2)}
+    if(c.n){const w=new THREE.Mesh(wGeoH,wMat);w.position.set(cx2,WALL_H/2,y*CELL);w.castShadow=true;w.receiveShadow=true;if(Math.random()<0.03)w.rotation.y+=(Math.random()-0.5)*0.008;scene.add(w);const b=new THREE.Mesh(bGeoH,baseMat);b.position.set(cx2,0.05,y*CELL+WALL_THICK/2+0.025);scene.add(b);const b2=b.clone();b2.position.z=y*CELL-WALL_THICK/2-0.025;scene.add(b2)}
     if(c.w){const w=new THREE.Mesh(wGeoV,wMat);w.position.set(x*CELL,WALL_H/2,cz);w.castShadow=true;w.receiveShadow=true;scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set(x*CELL+WALL_THICK/2+0.025,0.05,cz);scene.add(b);const b2=b.clone();b2.position.x=x*CELL-WALL_THICK/2-0.025;scene.add(b2)}
     if(y===MH-1&&c.s){const w=new THREE.Mesh(wGeoH,wMat);w.position.set(cx2,WALL_H/2,(y+1)*CELL);scene.add(w);const b=new THREE.Mesh(bGeoH,baseMat);b.position.set(cx2,0.05,(y+1)*CELL-WALL_THICK/2-0.025);scene.add(b)}
     if(x===MW-1&&c.e){const w=new THREE.Mesh(wGeoV,wMat);w.position.set((x+1)*CELL,WALL_H/2,cz);scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set((x+1)*CELL-WALL_THICK/2-0.025,0.05,cz);scene.add(b)}
@@ -240,7 +266,7 @@ function buildScene(){
     const tubeMat=new THREE.MeshBasicMaterial({color:tubeColor,transparent:true,opacity:isBroken?0.2:0.95});
     const tube=new THREE.Mesh(tubeGeo,tubeMat);tube.position.set(lx,WALL_H-0.01,lz);scene.add(tube);
     // Light (yellow-green tint like real fluorescent)
-    const lightColor=0xe8d090;
+    const lightColors=[0xe8d090,0xf0e0a0,0xddc880,0xfff5d0,0xe5c870];const lightColor=lightColors[Math.floor(Math.random()*lightColors.length)];
     const pl=new THREE.PointLight(lightColor,baseI,CELL*4,1.5);pl.position.set(lx,WALL_H-0.08,lz);if(!isBroken){pl.castShadow=true;pl.shadow.mapSize.set(256,256);pl.shadow.bias=-0.002;}scene.add(pl);
     flickerLights.push({light:pl,tube,base:baseI,rate:flickRate,broken:isBroken});
   }
@@ -248,9 +274,9 @@ function buildScene(){
   exitPos={x:(MW-1)*CELL+CELL/2,z:(MH-1)*CELL+CELL/2};
   const doorMat=new THREE.MeshStandardMaterial({color:0x2a2015,roughness:0.8});
   const door=new THREE.Mesh(new THREE.BoxGeometry(1.0,2.2,0.1),doorMat);door.position.set(exitPos.x,1.1,exitPos.z);scene.add(door);
-  const signMat=new THREE.MeshBasicMaterial({color:0x33aa44});
+  const signMat=new THREE.MeshBasicMaterial({color:0x886644});
   const sign=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.15,0.03),signMat);sign.position.set(exitPos.x,2.4,exitPos.z);scene.add(sign);
-  const exitLight=new THREE.PointLight(0x33ff55,0.4,4,2);exitLight.position.set(exitPos.x,2.3,exitPos.z);scene.add(exitLight);
+  const exitLight=new THREE.PointLight(0xffe8c0,0.6,3,2);exitLight.position.set(exitPos.x,WALL_H-0.1,exitPos.z);scene.add(exitLight);
   // Pillars at intersections
   const pillarGeo=new THREE.BoxGeometry(0.3,WALL_H,0.3);
   const pillarMat=new THREE.MeshStandardMaterial({color:0x7a6a40,roughness:1.0,metalness:0.0});
@@ -348,8 +374,20 @@ function update(dt){
   playerY=1.5+(moved?Math.sin(gameTime*(running?10:7))*(running?0.03:0.015):0);
   camera.position.set(playerPos.x,playerY,playerPos.z);camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;
   for(const fl of flickerLights){if(fl.broken)continue;if(Math.random()<fl.rate){const off=Math.random()<0.18;fl.light.intensity=off?0:fl.base*(0.4+Math.random()*0.8);fl.tube.material.opacity=off?0.15:0.7+Math.random()*0.3}}
-  if(entityTimer>45&&entities.length<3){spawnEntity();entityTimer=0;showMsg("……");entSnd()}
+  const spawnInterval=35+Math.random()*85;if(entityTimer>spawnInterval&&entities.length<3){spawnEntity();entityTimer=0;showMsg("……");entSnd()}
   for(const e of entities){moveEnt(e,dt);if(Math.hypot(e.x-playerPos.x,e.z-playerPos.z)<8&&Math.random()<0.005)entSnd()}
+  // Random events
+  if(Math.random()<0.0003&&!dead&&!won){
+    const ev=Math.floor(Math.random()*4);
+    if(ev===0){// All lights flicker off briefly
+      for(const fl of flickerLights){fl.light.intensity=0;fl.tube.material.opacity=0.1}
+      setTimeout(()=>{for(const fl of flickerLights)if(!fl.broken)fl.light.intensity=fl.base},Math.random()*3000+2000);
+      showMsg("")}
+    else if(ev===1){// Distant sound
+      try{const a=ac(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=80+Math.random()*40;g.gain.setValueAtTime(0.02,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+2);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+2)}catch(e){}}
+    else if(ev===2){showMsg("")}// nothing, just silence
+    else{camera.rotation.z=0.005;setTimeout(()=>camera.rotation.z=0,800)}// slight tilt
+  }
   let near=false;for(const e of entities)if(Math.hypot(e.x-playerPos.x,e.z-playerPos.z)<7)near=true;
   if(near){sanity=Math.max(0,sanity-5*dt);scene.fog.density=0.05+0.03*(1-sanity/30);camera.rotation.z=Math.sin(gameTime*2.5)*0.012*(1-sanity/50)}
   else{sanity=Math.min(100,sanity+1.5*dt);scene.fog.density=0.05;camera.rotation.z=0}
