@@ -236,7 +236,7 @@ function buildScene(){
   const fl=new THREE.Mesh(flGeo,fMat);fl.position.set(MW*CELL/2,-0.04,MH*CELL/2);fl.receiveShadow=true;scene.add(fl);
   // Ceiling: individual tiles with frame + random missing
   const cFrameMat=new THREE.MeshStandardMaterial({color:0x2a2a20,roughness:1.0,metalness:0});
-  const tileSize=1.2;const tilePad=0.04;
+  const tileSize=1.125;const tilePad=0.04;
   for(let tz=0;tz<MH*CELL;tz+=tileSize){for(let tx=0;tx<MW*CELL;tx+=tileSize){
     if(Math.random()<0.05)continue;// missing tile
     const tile=new THREE.Mesh(new THREE.BoxGeometry(tileSize-tilePad,0.02,tileSize-tilePad),cMat);
@@ -267,7 +267,7 @@ function buildScene(){
   const tubeGeo=new THREE.BoxGeometry(2.0,0.04,0.08);
   const recessGeo=new THREE.BoxGeometry(2.2,0.06,0.25);
   const recessMat=new THREE.MeshStandardMaterial({color:0x1a1a15,roughness:1});
-  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){
+  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){if(Math.random()<0.2)continue;// random missing light
     const lx=x*CELL+CELL/2,lz=y*CELL+CELL/2;
     const isBroken=Math.random()<0.1;
     const isDim=Math.random()<0.15;
@@ -291,6 +291,15 @@ function buildScene(){
   const signMat=new THREE.MeshBasicMaterial({color:0x886644});
   const sign=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.15,0.03),signMat);sign.position.set(exitPos.x,2.4,exitPos.z);scene.add(sign);
   const exitLight=new THREE.PointLight(0xffe8c0,0.6,3,2);exitLight.position.set(exitPos.x,WALL_H-0.1,exitPos.z);scene.add(exitLight);
+  // Wall corner shadow strips (AO fake)
+  const shadowMat=new THREE.MeshBasicMaterial({color:0x0a0804,transparent:true,opacity:0.25});
+  const shGeoH=new THREE.BoxGeometry(CELL,0.4,0.06);
+  const shGeoV=new THREE.BoxGeometry(0.06,0.4,CELL);
+  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
+    const c=maze[y][x],cx3=x*CELL+CELL/2,cz3=y*CELL+CELL/2;
+    if(c.n){const sh=new THREE.Mesh(shGeoH,shadowMat);sh.position.set(cx3,0.2,y*CELL+0.08);scene.add(sh)}
+    if(c.w){const sh=new THREE.Mesh(shGeoV,shadowMat);sh.position.set(x*CELL+0.08,0.2,cz3);scene.add(sh)}
+  }
   // Pillars at intersections
   const pillarGeo=new THREE.BoxGeometry(0.3,WALL_H,0.3);
   const pillarMat=new THREE.MeshStandardMaterial({color:0x7a6a40,roughness:1.0,metalness:0.0});
@@ -352,7 +361,21 @@ function moveEnt(e,dt){
 
 // ─── Audio ───
 let _ac=null;function ac(){if(!_ac)_ac=new(window.AudioContext||window.webkitAudioContext)();if(_ac.state==='suspended')_ac.resume();return _ac}
-function hum(){try{const a=ac(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=60;g.gain.value=0.02;o.connect(g);g.connect(a.destination);o.start();const o2=a.createOscillator(),g2=a.createGain();o2.type='sine';o2.frequency.value=120;g2.gain.value=0.008;o2.connect(g2);g2.connect(a.destination);o2.start()}catch(e){}}
+function hum(){try{const a=ac();
+  // 60Hz fluorescent hum
+  const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=60;g.gain.value=0.02;o.connect(g);g.connect(a.destination);o.start();
+  // 120Hz harmonic
+  const o2=a.createOscillator(),g2=a.createGain();o2.type='sine';o2.frequency.value=120;g2.gain.value=0.008;o2.connect(g2);g2.connect(a.destination);o2.start();
+  // HVAC low rumble
+  const o3=a.createOscillator(),g3=a.createGain();o3.type='sawtooth';o3.frequency.value=28;g3.gain.value=0.006;o3.connect(g3);g3.connect(a.destination);o3.start();
+  // Random ambient sounds loop
+  setInterval(()=>{if(Math.random()<0.3){try{const a2=ac(),o4=a2.createOscillator(),g4=a2.createGain();
+    const types=['sine','triangle','sawtooth'];o4.type=types[Math.floor(Math.random()*3)];
+    o4.frequency.value=30+Math.random()*80;g4.gain.setValueAtTime(0.008+Math.random()*0.012,a2.currentTime);
+    g4.gain.exponentialRampToValueAtTime(0.001,a2.currentTime+1+Math.random()*2);
+    o4.connect(g4);g4.connect(a2.destination);o4.start();o4.stop(a2.currentTime+1+Math.random()*2)}catch(e){}}
+  },4000+Math.random()*6000);
+  }catch(e){}}
 function step(){try{const a=ac(),b=a.createBufferSource(),buf=a.createBuffer(1,a.sampleRate*0.05,a.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()-0.5)*Math.exp(-i/(a.sampleRate*0.01))*0.2;b.buffer=buf;b.connect(a.destination);b.start()}catch(e){}}
 function entSnd(){try{const a=ac(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.frequency.value=28+Math.random()*12;g.gain.setValueAtTime(0.04,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+0.4)}catch(e){}}
 
