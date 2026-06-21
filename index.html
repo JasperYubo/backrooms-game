@@ -92,7 +92,7 @@ let lookTouchId=null,lookLastX=0,lookLastY=0;
 const mmapCanvas=document.getElementById('minimap');
 const mmapCtx=mmapCanvas.getContext('2d');
 
-const CELL=4.5,WALL_H=2.8,WALL_THICK=0.25,MW=16,MH=16;
+const CELL=4.5,WALL_H=2.8,WALL_THICK=0.25,MW=20,MH=20;
 const MOVE_SPD=3.8,RUN_SPD=7,M_SENS=0.002;
 
 // ─── Room Graph Architecture Generator ───
@@ -344,12 +344,13 @@ function buildScene(){
   const recessGeo=new THREE.BoxGeometry(2.2,0.06,0.25);
   const recessMat=new THREE.MeshStandardMaterial({color:0x1a1a15,roughness:1});
   // Light clusters: some areas bright, some dark zones
-  const lightZones=[];for(let i=0;i<6;i++)lightZones.push({x:Math.random()*MW,y:Math.random()*MH,r:3+Math.random()*4});
+  const lightZones=[{x:0,y:0,r:4}];// Always light near spawn
+  for(let i=0;i<8;i++)lightZones.push({x:Math.random()*MW,y:Math.random()*MH,r:3+Math.random()*5});
   for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){
-    // Check if in a dark zone (far from all light clusters = more likely to be dark)
+    // Check if in a light zone
     let inZone=false;for(const z of lightZones)if(Math.hypot(x-z.x,y-z.y)<z.r)inZone=true;
-    if(!inZone&&Math.random()<0.6)continue;// 60% chance no light outside zones
-    if(inZone&&Math.random()<0.1)continue;// 10% missing even in lit zones
+    if(!inZone&&Math.random()<0.4)continue;// 40% chance no light outside zones
+    if(inZone&&Math.random()<0.12)continue;// 12% missing even in lit zones
     const lx=x*CELL+CELL/2,lz=y*CELL+CELL/2;
     const isBroken=Math.random()<0.1;
     const isDim=Math.random()<0.15;
