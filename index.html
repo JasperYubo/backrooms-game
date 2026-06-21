@@ -218,22 +218,12 @@ function ceilTex(){return mkTex((ctx,S)=>{
 function buildScene(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0804);
   scene.fog=new THREE.FogExp2(0x2a2010,0.018);// warm yellow fog, not black void
-  const texLoader=new THREE.TextureLoader();
-  const R2='https://pub-fab801f03e7340d58a03b0eb8ccf2914.r2.dev/backrooms-assets/';
-  const wallColor=texLoader.load(R2+'Wallpaper001A_1K-JPG_Color.jpg');
-  wallColor.wrapS=wallColor.wrapT=THREE.RepeatWrapping;wallColor.repeat.set(1,1);
-  const wallNorm=texLoader.load(R2+'Wallpaper001A_1K-JPG_NormalGL.jpg');
-  wallNorm.wrapS=wallNorm.wrapT=THREE.RepeatWrapping;wallNorm.repeat.set(1,1);
-  const wallRough=texLoader.load(R2+'Wallpaper001A_1K-JPG_Roughness.jpg');
-  wallRough.wrapS=wallRough.wrapT=THREE.RepeatWrapping;wallRough.repeat.set(1,1);
-  const wMat=new THREE.MeshStandardMaterial({map:wallColor,normalMap:wallNorm,normalScale:new THREE.Vector2(0.4,0.4),roughnessMap:wallRough,roughness:1.0,metalness:0.0});
-  const carpetColor=texLoader.load(R2+'Carpet008_1K-JPG_Color.jpg');
-  carpetColor.wrapS=carpetColor.wrapT=THREE.RepeatWrapping;carpetColor.repeat.set(MW*2,MH*2);
-  const carpetNorm=texLoader.load(R2+'Carpet008_1K-JPG_NormalGL.jpg');
-  carpetNorm.wrapS=carpetNorm.wrapT=THREE.RepeatWrapping;carpetNorm.repeat.set(MW*2,MH*2);
-  const fMat=new THREE.MeshStandardMaterial({map:carpetColor,normalMap:carpetNorm,normalScale:new THREE.Vector2(0.3,0.3),roughness:1.0,metalness:0.0});
-  const cMat=new THREE.MeshStandardMaterial({map:ceilTex(),roughness:1.0,metalness:0.0});
-  const baseMat=new THREE.MeshStandardMaterial({color:0x3a2810,roughness:0.9});
+  // Bright yellow wall texture (procedural, guaranteed visible)
+  const wMat=new THREE.MeshLambertMaterial({map:wallTex(),color:0xc8b060});
+  // Floor: brownish carpet
+  const fMat=new THREE.MeshLambertMaterial({map:floorTex(),color:0x8b7355});
+  const cMat=new THREE.MeshLambertMaterial({map:ceilTex(),color:0xd4c89a});
+  const baseMat=new THREE.MeshLambertMaterial({color:0x4a3515});
   maze=genMaze(MW,MH);
   // Floor (box for thickness)
   const flGeo=new THREE.BoxGeometry(MW*CELL,0.08,MH*CELL);
@@ -264,8 +254,8 @@ function buildScene(){
     if(y===MH-1&&c.s){const w=new THREE.Mesh(wGeoH,wMat);w.position.set(cx2,WALL_H/2,(y+1)*CELL);scene.add(w);const b=new THREE.Mesh(bGeoH,baseMat);b.position.set(cx2,0.05,(y+1)*CELL-WALL_THICK/2-0.025);scene.add(b)}
     if(x===MW-1&&c.e){const w=new THREE.Mesh(wGeoV,wMat);w.position.set((x+1)*CELL,WALL_H/2,cz);scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set((x+1)*CELL-WALL_THICK/2-0.025,0.05,cz);scene.add(b)}
   }
-  // Ambient: Level 0 is BRIGHT fluorescent lighting
-  scene.add(new THREE.AmbientLight(0xfff8e0,0.3));
+  // Ambient: Level 0 bright uniform fluorescent
+  scene.add(new THREE.AmbientLight(0xfff8e0,0.5));
   // Fluorescent tube lights (Level 0 style: long tubes recessed in ceiling)
   flickerLights=[];
   const tubeGeo=new THREE.BoxGeometry(2.0,0.04,0.08);
