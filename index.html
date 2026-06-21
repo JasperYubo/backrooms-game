@@ -46,12 +46,8 @@ canvas{display:block;position:fixed;top:0;left:0}
 <div id="overlay">
 <h1>后 室</h1>
 <div class="sub">LEVEL 0</div>
-<p><span style="color:#383838">听到脚步声就跑。</span></p>
-<div style="display:flex;gap:16px;margin-top:12px">
-<button onclick="start('touch')" style="padding:12px 30px;border:1px solid rgba(201,180,88,.4);background:transparent;color:#c9b458;font-size:13px;cursor:pointer;letter-spacing:3px;font-family:inherit">📱 触屏模式</button>
-<button onclick="start('pc')" style="padding:12px 30px;border:1px solid rgba(201,180,88,.4);background:transparent;color:#c9b458;font-size:13px;cursor:pointer;letter-spacing:3px;font-family:inherit">🖥 主机模式</button>
-</div>
-<p style="color:#444;font-size:10px;margin-top:16px">触屏：摇杆+滑动 · 主机：WASD+鼠标+Shift跑</p>
+<p>电脑：WASD · 鼠标 · Shift跑<br>手机：左摇杆移动 · 滑动屏幕转视角<br><br><span style="color:#383838">听到脚步声就跑。</span></p>
+<button onclick="start()">进 入</button>
 </div>
 <div id="hud"><div style="display:flex;gap:10px;align-items:center"><span>LV.0</span><div class="bar"><div class="bf" id="sf"></div></div></div><div style="display:flex;gap:10px;align-items:center"><div class="bar"><div class="bf" id="stf"></div></div><span id="tm">00:00</span></div></div>
 <div id="msg"></div>
@@ -217,7 +213,7 @@ function ceilTex(){return mkTex((ctx,S)=>{
 // ─── Build Scene ───
 function buildScene(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0804);
-  scene.fog=new THREE.FogExp2(0x1a1508,0.015);// very light fog, Level 0 is visible
+  scene.fog=new THREE.FogExp2(0x0a0804,0.025);
   const texLoader=new THREE.TextureLoader();
   const R2='https://pub-fab801f03e7340d58a03b0eb8ccf2914.r2.dev/backrooms-assets/';
   const wallColor=texLoader.load(R2+'Wallpaper001A_1K-JPG_Color.jpg');
@@ -265,17 +261,17 @@ function buildScene(){
     if(x===MW-1&&c.e){const w=new THREE.Mesh(wGeoV,wMat);w.position.set((x+1)*CELL,WALL_H/2,cz);scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set((x+1)*CELL-WALL_THICK/2-0.025,0.05,cz);scene.add(b)}
   }
   // Ambient (very low, Level 0 style)
-  scene.add(new THREE.AmbientLight(0xfff8dc,0.25));// Level 0 is BRIGHT
+  scene.add(new THREE.AmbientLight(0xc9a840,0.06));
   // Fluorescent tube lights (Level 0 style: long tubes recessed in ceiling)
   flickerLights=[];
   const tubeGeo=new THREE.BoxGeometry(2.0,0.04,0.08);
   const recessGeo=new THREE.BoxGeometry(2.2,0.06,0.25);
   const recessMat=new THREE.MeshStandardMaterial({color:0x1a1a15,roughness:1});
-  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){if(Math.random()<0.05)continue;// only 5% missing
+  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){if(Math.random()<0.2)continue;// random missing light
     const lx=x*CELL+CELL/2,lz=y*CELL+CELL/2;
-    const isBroken=Math.random()<0.03;// very few broken
-    const isDim=Math.random()<0.08;
-    const baseI=isBroken?0:isDim?2.5:4.5;// bright!
+    const isBroken=Math.random()<0.1;
+    const isDim=Math.random()<0.15;
+    const baseI=isBroken?0:isDim?1.0:3.5;
     const flickRate=isBroken?0:isDim?0.025:0.005+Math.random()*0.008;
     // Recess in ceiling
     const recess=new THREE.Mesh(recessGeo,recessMat);recess.position.set(lx,WALL_H+0.02,lz);scene.add(recess);
@@ -447,8 +443,8 @@ function init3D(){
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,60);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.6;
-  renderer.shadowMap.enabled=false;// disabled for brightness + performance
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
+  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   clock=new THREE.Clock();buildScene();setupPost();
   addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)});
@@ -461,7 +457,7 @@ function init3D(){
 }
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),0.05);if(started2)update(dt);composer.render()}
 
-window.start=function(mode){
+window.start=function(){
   // Fullscreen + landscape lock
   const el=document.documentElement;
   if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});
@@ -471,13 +467,8 @@ window.start=function(mode){
   document.getElementById('hud').classList.add('show');
   document.getElementById('minimap').classList.add('show');
   started2=true;
-  if(mode==='pc'){
-    document.getElementById('c').requestPointerLock();
-  }else{
-    document.getElementById('jl').classList.add('show');
-    document.getElementById('rb').classList.add('show');
-    initJoy();
-  }
+  if(!isMobile){document.getElementById('c').requestPointerLock()}
+  else{document.getElementById('jl').classList.add('show');document.getElementById('rb').classList.add('show');initJoy()}
   hum();showMsg("找到出口……");
 };
 init3D();
