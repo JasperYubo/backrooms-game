@@ -200,6 +200,12 @@ function genMaze(w,h){
   // Mark all visited for BFS compatibility
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)g[y][x].v=true;
   
+  // CRITICAL: Ensure spawn area (0,0 to 2,2) is fully open
+  for(let y=0;y<3&&y<h;y++)for(let x=0;x<3&&x<w;x++){
+    if(x<2){g[y][x].e=0;if(x+1<w)g[y][x+1].w=0}
+    if(y<2){g[y][x].s=0;if(y+1<h)g[y+1][x].n=0}
+  }
+  
   return g;
 }
 
