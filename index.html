@@ -187,7 +187,7 @@ function ceilTex(){return mkTex((ctx,S)=>{
 // ─── Build Scene ───
 function buildScene(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0804);
-  scene.fog=new THREE.FogExp2(0x0a0804,0.035);
+  scene.fog=new THREE.FogExp2(0x0a0804,0.025);
   const wMat=new THREE.MeshStandardMaterial({map:wallTex(),roughness:0.88});
   const fMat=new THREE.MeshStandardMaterial({map:floorTex(),roughness:0.95});
   const cMat=new THREE.MeshStandardMaterial({map:ceilTex(),roughness:0.9});
@@ -209,13 +209,13 @@ function buildScene(){
     if(x===MW-1&&c.e){const w=new THREE.Mesh(wGeoV,wMat);w.position.set((x+1)*CELL,WALL_H/2,cz);scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set((x+1)*CELL-WALL_THICK/2-0.025,0.05,cz);scene.add(b)}
   }
   // Ambient (very low, Level 0 style)
-  scene.add(new THREE.AmbientLight(0xc9a840,0.08));
+  scene.add(new THREE.AmbientLight(0xc9a840,0.12));
   // Fluorescent tube lights (Level 0 style: long tubes recessed in ceiling)
   flickerLights=[];
   const tubeGeo=new THREE.BoxGeometry(2.0,0.04,0.08);
   const recessGeo=new THREE.BoxGeometry(2.2,0.06,0.25);
   const recessMat=new THREE.MeshStandardMaterial({color:0x1a1a15,roughness:1});
-  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){if((x+y)%2!==0)continue;
+  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){
     const lx=x*CELL+CELL/2,lz=y*CELL+CELL/2;
     const isBroken=Math.random()<0.1;
     const isDim=Math.random()<0.15;
@@ -229,7 +229,7 @@ function buildScene(){
     const tube=new THREE.Mesh(tubeGeo,tubeMat);tube.position.set(lx,WALL_H-0.01,lz);scene.add(tube);
     // Light (yellow-green tint like real fluorescent)
     const lightColor=0xf5e8b0;
-    const pl=new THREE.PointLight(lightColor,baseI,CELL*3,1.8);pl.position.set(lx,WALL_H-0.08,lz);scene.add(pl);
+    const pl=new THREE.PointLight(lightColor,baseI,CELL*4,1.5);pl.position.set(lx,WALL_H-0.08,lz);scene.add(pl);
     flickerLights.push({light:pl,tube,base:baseI,rate:flickRate,broken:isBroken});
   }
   // Exit: door + EXIT sign
@@ -244,7 +244,7 @@ function buildScene(){
 
 // ─── Entity ───
 function spawnEntity(){
-  let ex,ez;for(let i=0;i<50;i++){ex=Math.floor(Math.random()*MW)*CELL+CELL/2;ez=Math.floor(Math.random()*MH)*CELL+CELL/2;if(Math.hypot(ex-playerPos.x,ez-playerPos.z)>CELL*6)break}
+  let ex,ez;for(let i=0;i<50;i++){ex=Math.floor(Math.random()*MW)*CELL+CELL/2;ez=Math.floor(Math.random()*MH)*CELL+CELL/2;if(Math.hypot(ex-playerPos.x,ez-playerPos.z)>CELL*10)break}
   const group=new THREE.Group();const bMat=new THREE.MeshStandardMaterial({color:0x080808,roughness:1});
   const torso=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.05,1.3,6),bMat);torso.position.y=1.0;group.add(torso);
   const head=new THREE.Group();head.position.y=1.85;
@@ -348,7 +348,7 @@ function init3D(){
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,60);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.3;
   renderer.outputEncoding=THREE.sRGBEncoding;
   clock=new THREE.Clock();buildScene();setupPost();
   addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)});
