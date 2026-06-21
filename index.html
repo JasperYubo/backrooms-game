@@ -93,7 +93,7 @@ const mmapCanvas=document.getElementById('minimap');
 const mmapCtx=mmapCanvas.getContext('2d');
 
 const CELL=4.5,WALL_H=2.8,WALL_THICK=0.25,MW=16,MH=16;
-const MOVE_SPD=3.5,RUN_SPD=6,M_SENS=0.002;
+const MOVE_SPD=3.8,RUN_SPD=7,M_SENS=0.002;
 
 // ─── Maze (with big rooms, L/T shapes, long corridors) ───
 function genMaze(w,h){
@@ -329,7 +329,7 @@ function spawnEntity(){
   const lL=new THREE.Mesh(legGeo,bMat);lL.position.set(-0.06,0.35,0);group.add(lL);
   const rL=new THREE.Mesh(legGeo,bMat);rL.position.set(0.06,0.38,0);group.add(rL);
   group.position.set(ex,0,ez);scene.add(group);
-  entities.push({group,head,lArm,rArm,x:ex,z:ez,speed:2.0+Math.random()*0.6,pathTimer:0,target:null});
+  entities.push({group,head,lArm,rArm,x:ex,z:ez,speed:1.4+Math.random()*0.5,pathTimer:0,target:null});
 }
 
 // ─── Collision (all 4 walls, thickness-aware) ───
@@ -348,7 +348,7 @@ function canMove(nx,nz,r){
 
 // ─── Entity AI (BFS) ───
 function moveEnt(e,dt){
-  const dist=Math.hypot(playerPos.x-e.x,playerPos.z-e.z);if(dist<0.5){dead=true;return}
+  const dist=Math.hypot(playerPos.x-e.x,playerPos.z-e.z);if(dist<0.4){dead=true;return}
   e.pathTimer-=dt;if(e.pathTimer<=0||!e.target){e.pathTimer=0.4;e.target=bfsNext(e.x,e.z,playerPos.x,playerPos.z)||{x:playerPos.x,z:playerPos.z}}
   const dx=e.target.x-e.x,dz=e.target.z-e.z,d=Math.hypot(dx,dz);if(d<0.2){e.pathTimer=0;return}
   const a=Math.atan2(dz,dx),s=e.speed*dt;let nx=e.x+Math.cos(a)*s,nz=e.z+Math.sin(a)*s;
@@ -406,12 +406,12 @@ function update(dt){
   if(isMobile){if(Math.abs(jlx)>0.1||Math.abs(jly)>0.1){mx+=fw.x*(-jly)+rt.x*jlx;mz+=fw.z*(-jly)+rt.z*jlx;moved=true}}
   else{if(keys.KeyW||keys.ArrowUp){mx+=fw.x;mz+=fw.z;moved=true}if(keys.KeyS||keys.ArrowDown){mx-=fw.x;mz-=fw.z;moved=true}if(keys.KeyA||keys.ArrowLeft){mx-=rt.x;mz-=rt.z;moved=true}if(keys.KeyD||keys.ArrowRight){mx+=rt.x;mz+=rt.z;moved=true}}
   if(moved){const l=Math.hypot(mx,mz)||1;mx/=l;mz/=l;const nx=playerPos.x+mx*spd*dt,nz=playerPos.z+mz*spd*dt;if(canMove(nx,playerPos.z,0.25))playerPos.x=nx;if(canMove(playerPos.x,nz,0.25))playerPos.z=nz;stepT+=dt*(running?1.5:1);if(stepT>0.38){stepT=0;step()}}
-  if(running&&moved)stamina=Math.max(0,stamina-22*dt);else stamina=Math.min(100,stamina+8*dt);
+  if(running&&moved)stamina=Math.max(0,stamina-18*dt);else stamina=Math.min(100,stamina+12*dt);
   document.getElementById('stf').style.width=stamina+'%';
   playerY=1.5+(moved?Math.sin(gameTime*(running?10:7))*(running?0.03:0.015):0);
   camera.position.set(playerPos.x,playerY,playerPos.z);camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;
   for(const fl of flickerLights){if(fl.broken)continue;if(Math.random()<fl.rate){const off=Math.random()<0.18;fl.light.intensity=off?0:fl.base*(0.4+Math.random()*0.8);fl.tube.material.opacity=off?0.15:0.7+Math.random()*0.3}}
-  const spawnInterval=35+Math.random()*85;if(entityTimer>spawnInterval&&entities.length<3){spawnEntity();entityTimer=0;showMsg("……");entSnd()}
+  const spawnInterval=90+Math.random()*120;if(entityTimer>spawnInterval&&entities.length<2){spawnEntity();entityTimer=0;showMsg("……");entSnd()}
   for(const e of entities){moveEnt(e,dt);if(Math.hypot(e.x-playerPos.x,e.z-playerPos.z)<8&&Math.random()<0.005)entSnd()}
   // Random events
   if(Math.random()<0.0003&&!dead&&!won){
