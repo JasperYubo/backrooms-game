@@ -196,13 +196,13 @@ function buildScene(){
   wallNorm.wrapS=wallNorm.wrapT=THREE.RepeatWrapping;wallNorm.repeat.set(1,1);
   const wallRough=texLoader.load(R2+'Wallpaper001A_1K-JPG_Roughness.jpg');
   wallRough.wrapS=wallRough.wrapT=THREE.RepeatWrapping;wallRough.repeat.set(1,1);
-  const wMat=new THREE.MeshStandardMaterial({map:wallColor,normalMap:wallNorm,normalScale:new THREE.Vector2(0.8,0.8),roughnessMap:wallRough,roughness:0.9});
+  const wMat=new THREE.MeshStandardMaterial({map:wallColor,normalMap:wallNorm,normalScale:new THREE.Vector2(0.4,0.4),roughnessMap:wallRough,roughness:1.0,metalness:0.0});
   const carpetColor=texLoader.load(R2+'Carpet008_1K-JPG_Color.jpg');
   carpetColor.wrapS=carpetColor.wrapT=THREE.RepeatWrapping;carpetColor.repeat.set(MW*2,MH*2);
   const carpetNorm=texLoader.load(R2+'Carpet008_1K-JPG_NormalGL.jpg');
   carpetNorm.wrapS=carpetNorm.wrapT=THREE.RepeatWrapping;carpetNorm.repeat.set(MW*2,MH*2);
-  const fMat=new THREE.MeshStandardMaterial({map:carpetColor,normalMap:carpetNorm,normalScale:new THREE.Vector2(0.5,0.5),roughness:0.95});
-  const cMat=new THREE.MeshStandardMaterial({map:ceilTex(),roughness:0.9});
+  const fMat=new THREE.MeshStandardMaterial({map:carpetColor,normalMap:carpetNorm,normalScale:new THREE.Vector2(0.3,0.3),roughness:1.0,metalness:0.0});
+  const cMat=new THREE.MeshStandardMaterial({map:ceilTex(),roughness:1.0,metalness:0.0});
   const baseMat=new THREE.MeshStandardMaterial({color:0x3a2810,roughness:0.9});
   maze=genMaze(MW,MH);
   // Floor & Ceiling (box for thickness)
@@ -240,7 +240,7 @@ function buildScene(){
     const tubeMat=new THREE.MeshBasicMaterial({color:tubeColor,transparent:true,opacity:isBroken?0.2:0.95});
     const tube=new THREE.Mesh(tubeGeo,tubeMat);tube.position.set(lx,WALL_H-0.01,lz);scene.add(tube);
     // Light (yellow-green tint like real fluorescent)
-    const lightColor=0xf5e8b0;
+    const lightColor=0xe8d090;
     const pl=new THREE.PointLight(lightColor,baseI,CELL*4,1.5);pl.position.set(lx,WALL_H-0.08,lz);if(!isBroken){pl.castShadow=true;pl.shadow.mapSize.set(256,256);pl.shadow.bias=-0.002;}scene.add(pl);
     flickerLights.push({light:pl,tube,base:baseI,rate:flickRate,broken:isBroken});
   }
@@ -253,7 +253,7 @@ function buildScene(){
   const exitLight=new THREE.PointLight(0x33ff55,0.4,4,2);exitLight.position.set(exitPos.x,2.3,exitPos.z);scene.add(exitLight);
   // Pillars at intersections
   const pillarGeo=new THREE.BoxGeometry(0.3,WALL_H,0.3);
-  const pillarMat=new THREE.MeshStandardMaterial({color:0x8a7a50,roughness:0.85});
+  const pillarMat=new THREE.MeshStandardMaterial({color:0x7a6a40,roughness:1.0,metalness:0.0});
   for(let y=0;y<MH;y+=3)for(let x=0;x<MW;x+=3){
     if(maze[y][x].n&&maze[y][x].w){
       const p=new THREE.Mesh(pillarGeo,pillarMat);p.position.set(x*CELL,WALL_H/2,y*CELL);p.castShadow=true;p.receiveShadow=true;scene.add(p);
@@ -368,7 +368,7 @@ function init3D(){
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,60);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   clock=new THREE.Clock();buildScene();setupPost();
