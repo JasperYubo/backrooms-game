@@ -544,7 +544,7 @@ function init3D(){
   document.addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='ShiftLeft'||e.code==='ShiftRight')running=false});
   document.getElementById('overlay').classList.remove('hidden');animate();
 }
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),0.05);if(started2)update(dt);composer.render()}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),0.05);if(started2)update(dt);try{composer.render()}catch(e){renderer.render(scene,camera)}}
 
 window.start=function(){
   // Fullscreen + landscape lock
