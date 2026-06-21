@@ -92,120 +92,47 @@ let lookTouchId=null,lookLastX=0,lookLastY=0;
 const mmapCanvas=document.getElementById('minimap');
 const mmapCtx=mmapCanvas.getContext('2d');
 
-const CELL=4.5,WALL_H=2.8,WALL_THICK=0.25,MW=20,MH=20;
+const CELL=4.5,WALL_H=2.8,WALL_THICK=0.25,MW=16,MH=16;
 const MOVE_SPD=3.8,RUN_SPD=7,M_SENS=0.002;
 
-// ─── Room Graph Architecture Generator ───
-// Generates building-like spaces: lobbies, offices, hallways, storage, open areas
-// Then connects them - NOT a maze-first approach
+// ─── Maze (with big rooms, L/T shapes, long corridors) ───
 function genMaze(w,h){
   const g=Array.from({length:h},()=>Array.from({length:w},()=>({n:1,s:1,e:1,w:1,v:false})));
-  
-  // Room types with size ranges
-  const roomTypes=[
-    {name:'lobby',minW:4,maxW:6,minH:4,maxH:6},    // large open areas
-    {name:'office',minW:2,maxW:3,minH:2,maxH:3},    // small rooms
-    {name:'hallway_h',minW:6,maxW:12,minH:1,maxH:1},// horizontal corridors
-    {name:'hallway_v',minW:1,maxW:1,minH:6,maxH:12},// vertical corridors
-    {name:'storage',minW:2,maxW:4,minH:2,maxH:3},   // medium rooms
-    {name:'open',minW:5,maxW:8,minH:5,maxH:8},      // huge open areas (Level 0 feel)
-  ];
-  
-  // Step 1: Place rooms
-  const rooms=[];
-  const attempts=80;
-  for(let i=0;i<attempts;i++){
-    const type=roomTypes[Math.floor(Math.random()*roomTypes.length)];
-    const rw=type.minW+Math.floor(Math.random()*(type.maxW-type.minW+1));
-    const rh=type.minH+Math.floor(Math.random()*(type.maxH-type.minH+1));
-    const rx=1+Math.floor(Math.random()*(w-rw-1));
-    const ry=1+Math.floor(Math.random()*(h-rh-1));
-    // Check overlap with margin
-    let overlap=false;
-    for(const r of rooms){
-      if(rx-1<r.x+r.w&&rx+rw+1>r.x&&ry-1<r.y+r.h&&ry+rh+1>r.y){overlap=true;break}
-    }
-    if(!overlap)rooms.push({x:rx,y:ry,w:rw,h:rh,type:type.name,cx:rx+Math.floor(rw/2),cy:ry+Math.floor(rh/2)});
-  }
-  
-  // Step 2: Carve rooms into grid
-  for(const r of rooms){
-    for(let dy=0;dy<r.h;dy++)for(let dx=0;dx<r.w;dx++){
-      const cx=r.x+dx,cy=r.y+dy;
-      if(cx>=w||cy>=h)continue;
-      if(dx<r.w-1&&cx+1<w){g[cy][cx].e=0;g[cy][cx+1].w=0}
-      if(dy<r.h-1&&cy+1<h){g[cy][cx].s=0;g[cy+1][cx].n=0}
-    }
-  }
-  
-  // Step 3: Connect rooms with corridors (MST-like)
-  // Sort rooms by distance to create organic connections
-  const connected=new Set([0]);
-  const edges=[];
-  while(connected.size<rooms.length){
-    let bestDist=Infinity,bestFrom=-1,bestTo=-1;
-    for(const fi of connected){
-      for(let ti=0;ti<rooms.length;ti++){
-        if(connected.has(ti))continue;
-        const d=Math.abs(rooms[fi].cx-rooms[ti].cx)+Math.abs(rooms[fi].cy-rooms[ti].cy);
-        if(d<bestDist){bestDist=d;bestFrom=fi;bestTo=ti}
-      }
-    }
-    if(bestTo===-1)break;
-    connected.add(bestTo);
-    edges.push([bestFrom,bestTo]);
-  }
-  
-  // Carve corridor paths between connected rooms
-  for(const[fi,ti]of edges){
-    let cx=rooms[fi].cx,cy=rooms[fi].cy;
-    const tx=rooms[ti].cx,ty=rooms[ti].cy;
-    // L-shaped corridor: go horizontal then vertical (or vice versa)
-    const goHFirst=Math.random()>0.5;
-    if(goHFirst){
-      while(cx!==tx){cx+=cx<tx?1:-1;if(cx>0&&cx<w-1&&cy>0&&cy<h-1){
-        if(cx<tx){g[cy][cx-1].e=0;g[cy][cx].w=0}else{g[cy][cx].e=0;g[cy][cx+1].w=0}}}
-      while(cy!==ty){cy+=cy<ty?1:-1;if(cx>0&&cx<w-1&&cy>0&&cy<h-1){
-        if(cy<ty){g[cy-1][cx].s=0;g[cy][cx].n=0}else{g[cy][cx].s=0;g[cy+1][cx].n=0}}}
-    }else{
-      while(cy!==ty){cy+=cy<ty?1:-1;if(cx>0&&cx<w-1&&cy>0&&cy<h-1){
-        if(cy<ty){g[cy-1][cx].s=0;g[cy][cx].n=0}else{g[cy][cx].s=0;g[cy+1][cx].n=0}}}
-      while(cx!==tx){cx+=cx<tx?1:-1;if(cx>0&&cx<w-1&&cy>0&&cy<h-1){
-        if(cx<tx){g[cy][cx-1].e=0;g[cy][cx].w=0}else{g[cy][cx].e=0;g[cy][cx+1].w=0}}}
-    }
-  }
-  
-  // Step 4: Add some extra random passages for backrooms feel (not too many)
-  for(let i=0;i<Math.floor(w*h*0.05);i++){
-    const rx=1+Math.floor(Math.random()*(w-2)),ry=1+Math.floor(Math.random()*(h-2));
+  // Step 1: DFS base maze
+  const st=[];g[0][0].v=true;st.push([0,0]);
+  while(st.length){const[x,y]=st[st.length-1];const nb=[];
+    if(y>0&&!g[y-1][x].v)nb.push([x,y-1,'n','s']);if(y<h-1&&!g[y+1][x].v)nb.push([x,y+1,'s','n']);
+    if(x<w-1&&!g[y][x+1].v)nb.push([x+1,y,'e','w']);if(x>0&&!g[y][x-1].v)nb.push([x-1,y,'w','e']);
+    if(nb.length){const[nx,ny,d1,d2]=nb[Math.floor(Math.random()*nb.length)];g[y][x][d1]=0;g[ny][nx][d2]=0;g[ny][nx].v=true;st.push([nx,ny])}else st.pop()}
+  // Step 2: Extra passages for openness
+  for(let i=0;i<Math.floor(w*h*0.15);i++){const rx=Math.floor(Math.random()*w),ry=Math.floor(Math.random()*h);
     const ds=['n','s','e','w'],d=ds[Math.floor(Math.random()*4)],op={n:'s',s:'n',e:'w',w:'e'};
     const nx2=d==='e'?rx+1:d==='w'?rx-1:rx,ny2=d==='s'?ry+1:d==='n'?ry-1:ry;
-    if(nx2>=0&&nx2<w&&ny2>=0&&ny2<h){g[ry][rx][d]=0;g[ny2][nx2][op[d]]=0}
+    if(nx2>=0&&nx2<w&&ny2>=0&&ny2<h){g[ry][rx][d]=0;g[ny2][nx2][op[d]]=0}}
+  // Step 3: Carve big rooms (3x3, 4x3, 4x4)
+  const roomCount=3+Math.floor(Math.random()*3);
+  for(let r=0;r<roomCount;r++){
+    const rw=3+Math.floor(Math.random()*2),rh=3+Math.floor(Math.random()*2);
+    const rx=1+Math.floor(Math.random()*(w-rw-1)),ry=1+Math.floor(Math.random()*(h-rh-1));
+    for(let dy=0;dy<rh;dy++)for(let dx=0;dx<rw;dx++){
+      const cx=rx+dx,cy=ry+dy;
+      if(cx<w-1){g[cy][cx].e=0;g[cy][cx+1].w=0}
+      if(cy<h-1){g[cy][cx].s=0;g[cy+1][cx].n=0}
+    }
   }
-  
-  // Step 5: Ensure all cells are reachable (flood fill from 0,0, connect isolated areas)
-  const reached=Array.from({length:h},()=>Array(w).fill(false));
-  const ff=[[0,0]];reached[0][0]=true;
-  // First find a reachable cell (might not be 0,0 if rooms don't cover it)
-  let startFound=false;
-  for(const r of rooms){if(r.x===1&&r.y===1){startFound=true;break}}
-  if(!startFound&&rooms.length>0){
-    // Connect cell 0,0 to nearest room
-    const nr=rooms[0];
-    let sx=0,sy=0;
-    while(sx<nr.x){g[sy][sx].e=0;g[sy][sx+1].w=0;sx++}
-    while(sy<nr.y){g[sy][sx].s=0;g[sy+1][sx].n=0;sy++}
+  // Step 4: Carve long corridors (horizontal and vertical)
+  const corrCount=2+Math.floor(Math.random()*2);
+  for(let c=0;c<corrCount;c++){
+    if(Math.random()>0.5){// horizontal
+      const cy=1+Math.floor(Math.random()*(h-2)),sx=Math.floor(Math.random()*(w-6));
+      const len=5+Math.floor(Math.random()*6);
+      for(let i=0;i<len&&sx+i<w-1;i++){g[cy][sx+i].e=0;g[cy][sx+i+1].w=0}
+    }else{// vertical
+      const cx=1+Math.floor(Math.random()*(w-2)),sy=Math.floor(Math.random()*(h-6));
+      const len=5+Math.floor(Math.random()*6);
+      for(let i=0;i<len&&sy+i<h-1;i++){g[sy+i][cx].s=0;g[sy+i+1][cx].n=0}
+    }
   }
-  
-  // Mark all visited for BFS compatibility
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++)g[y][x].v=true;
-  
-  // CRITICAL: Ensure spawn area (0,0 to 2,2) is fully open
-  for(let y=0;y<3&&y<h;y++)for(let x=0;x<3&&x<w;x++){
-    if(x<2){g[y][x].e=0;if(x+1<w)g[y][x+1].w=0}
-    if(y<2){g[y][x].s=0;if(y+1<h)g[y+1][x].n=0}
-  }
-  
   return g;
 }
 
@@ -262,22 +189,13 @@ function drawMinimap(){
 // ─── Textures ───
 function mkTex(fn,sz){const c=document.createElement('canvas');c.width=c.height=sz;fn(c.getContext('2d'),sz);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t}
 function wallTex(){return mkTex((ctx,S)=>{
-  // Top-to-bottom gradient: lighter yellow at top, dirty brown at bottom
-  const grd=ctx.createLinearGradient(0,0,0,S);
-  grd.addColorStop(0,'#c8b050');grd.addColorStop(0.3,'#bfa035');grd.addColorStop(0.6,'#a08025');grd.addColorStop(0.85,'#806515');grd.addColorStop(1,'#604a10');
+  const grd=ctx.createLinearGradient(0,0,0,S);grd.addColorStop(0,'#c4a030');grd.addColorStop(0.4,'#b89025');grd.addColorStop(0.7,'#a88020');grd.addColorStop(1,'#987018');
   ctx.fillStyle=grd;ctx.fillRect(0,0,S,S);
-  // Wallpaper stripes (subtle vertical)
-  for(let x=0;x<S;x+=18){ctx.fillStyle=`rgba(150,120,25,${0.02+Math.random()*0.05})`;ctx.fillRect(x,0,9,S)}
-  // Horizontal aging lines
-  for(let y=0;y<S;y+=35){ctx.fillStyle=`rgba(100,75,15,${0.02+Math.random()*0.04})`;ctx.fillRect(0,y,S,1)}
-  // Water stains (dripping from top)
-  for(let i=0;i<8;i++){let x=Math.random()*S,y=0;ctx.strokeStyle=`rgba(50,35,10,${0.1+Math.random()*0.12})`;ctx.lineWidth=Math.random()*5+2;ctx.beginPath();ctx.moveTo(x,y);while(y<S){y+=Math.random()*15+5;ctx.lineTo(x+(Math.random()-0.5)*4,y)}ctx.stroke()}
-  // Mold spots (mostly bottom half)
-  for(let i=0;i<15;i++){const my=S*0.4+Math.random()*S*0.6;const g2=ctx.createRadialGradient(Math.random()*S,my,0,Math.random()*S,my,Math.random()*35+10);g2.addColorStop(0,`rgba(${30+Math.random()*25},${40+Math.random()*20},${15+Math.random()*10},${0.08+Math.random()*0.12})`);g2.addColorStop(1,'transparent');ctx.fillStyle=g2;ctx.fillRect(0,0,S,S)}
-  // Large water damage patches (random)
-  for(let i=0;i<3;i++){const px=Math.random()*S,py=Math.random()*S*0.7;ctx.beginPath();ctx.ellipse(px,py,Math.random()*40+20,Math.random()*60+30,Math.random()*Math.PI,0,Math.PI*2);ctx.fillStyle=`rgba(70,50,20,${0.06+Math.random()*0.06})`;ctx.fill()}
-  // Noise grain
-  const img=ctx.getImageData(0,0,S,S);for(let i=0;i<img.data.length;i+=4){const n=(Math.random()-0.5)*10;img.data[i]+=n;img.data[i+1]+=n;img.data[i+2]+=n}ctx.putImageData(img,0,0);
+  for(let x=0;x<S;x+=20){ctx.fillStyle=`rgba(150,120,25,${0.03+Math.random()*0.07})`;ctx.fillRect(x,0,10,S)}
+  for(let y=0;y<S;y+=40){ctx.fillStyle=`rgba(130,100,20,${0.02+Math.random()*0.04})`;ctx.fillRect(0,y,S,1.5)}
+  for(let i=0;i<6;i++){let x=Math.random()*S,y=0;ctx.strokeStyle=`rgba(60,40,15,${0.08+Math.random()*0.1})`;ctx.lineWidth=Math.random()*4+2;ctx.beginPath();ctx.moveTo(x,y);while(y<S){y+=Math.random()*20+8;ctx.lineTo(x+(Math.random()-0.5)*5,y)}ctx.stroke()}
+  for(let i=0;i<12;i++){const g2=ctx.createRadialGradient(Math.random()*S,Math.random()*S,0,Math.random()*S,Math.random()*S,Math.random()*40+15);g2.addColorStop(0,`rgba(${40+Math.random()*30},${50+Math.random()*20},${20+Math.random()*15},${0.08+Math.random()*0.1})`);g2.addColorStop(1,'transparent');ctx.fillStyle=g2;ctx.fillRect(0,0,S,S)}
+  const img=ctx.getImageData(0,0,S,S);for(let i=0;i<img.data.length;i+=4){const n=(Math.random()-0.5)*8;img.data[i]+=n;img.data[i+1]+=n;img.data[i+2]+=n}ctx.putImageData(img,0,0);
 },512)}
 function floorTex(){return mkTex((ctx,S)=>{
   ctx.fillStyle='#3d2e1a';ctx.fillRect(0,0,S,S);
@@ -295,7 +213,7 @@ function ceilTex(){return mkTex((ctx,S)=>{
 // ─── Build Scene ───
 function buildScene(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0804);
-  scene.fog=new THREE.FogExp2(0x0a0804,0.018);
+  scene.fog=new THREE.FogExp2(0x0a0804,0.025);
   const texLoader=new THREE.TextureLoader();
   const R2='https://pub-fab801f03e7340d58a03b0eb8ccf2914.r2.dev/backrooms-assets/';
   const wallColor=texLoader.load(R2+'Wallpaper001A_1K-JPG_Color.jpg');
@@ -343,20 +261,13 @@ function buildScene(){
     if(x===MW-1&&c.e){const w=new THREE.Mesh(wGeoV,wMat);w.position.set((x+1)*CELL,WALL_H/2,cz);scene.add(w);const b=new THREE.Mesh(bGeoV,baseMat);b.position.set((x+1)*CELL-WALL_THICK/2-0.025,0.05,cz);scene.add(b)}
   }
   // Ambient (very low, Level 0 style)
-  scene.add(new THREE.AmbientLight(0xc9a840,0.15));
+  scene.add(new THREE.AmbientLight(0xc9a840,0.06));
   // Fluorescent tube lights (Level 0 style: long tubes recessed in ceiling)
   flickerLights=[];
   const tubeGeo=new THREE.BoxGeometry(2.0,0.04,0.08);
   const recessGeo=new THREE.BoxGeometry(2.2,0.06,0.25);
   const recessMat=new THREE.MeshStandardMaterial({color:0x1a1a15,roughness:1});
-  // Light clusters: some areas bright, some dark zones
-  const lightZones=[{x:0,y:0,r:4}];// Always light near spawn
-  for(let i=0;i<8;i++)lightZones.push({x:Math.random()*MW,y:Math.random()*MH,r:3+Math.random()*5});
-  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){
-    // Check if in a light zone
-    let inZone=false;for(const z of lightZones)if(Math.hypot(x-z.x,y-z.y)<z.r)inZone=true;
-    if(!inZone&&Math.random()<0.15)continue;// 15% chance no light outside zones
-    if(inZone&&Math.random()<0.12)continue;// 12% missing even in lit zones
+  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){if(Math.random()<0.2)continue;// random missing light
     const lx=x*CELL+CELL/2,lz=y*CELL+CELL/2;
     const isBroken=Math.random()<0.1;
     const isDim=Math.random()<0.15;
@@ -532,7 +443,7 @@ function init3D(){
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,60);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   clock=new THREE.Clock();buildScene();setupPost();
@@ -544,7 +455,7 @@ function init3D(){
   document.addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='ShiftLeft'||e.code==='ShiftRight')running=false});
   document.getElementById('overlay').classList.remove('hidden');animate();
 }
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),0.05);if(started2)update(dt);try{composer.render()}catch(e){renderer.render(scene,camera)}}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),0.05);if(started2)update(dt);composer.render()}
 
 window.start=function(){
   // Fullscreen + landscape lock
