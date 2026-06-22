@@ -37,7 +37,7 @@ canvas{display:block;position:fixed;top:0;left:0}
 #jl{left:20px}
 .jb{width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.03);border:1px solid rgba(201,180,88,.15)}
 .js{width:40px;height:40px;border-radius:50%;background:rgba(201,180,88,.2);position:relative;top:50%;left:50%;transform:translate(-50%,-50%)}
-#rb{position:fixed;bottom:130px;left:40px;width:38px;height:38px;border-radius:50%;background:rgba(201,180,88,.05);border:1px solid rgba(201,180,88,.2);z-index:20;display:none;align-items:center;justify-content:center;color:rgba(201,180,88,.5);font-size:9px;font-family:inherit}
+#rb{position:fixed;bottom:130px;right:40px;width:50px;height:50px;border-radius:50%;background:rgba(201,180,88,.05);border:1px solid rgba(201,180,88,.2);z-index:20;display:none;align-items:center;justify-content:center;color:rgba(201,180,88,.5);font-size:9px;font-family:inherit}
 #rb.show{display:flex}
 #rb.on{background:rgba(201,180,88,.2)}
 </style>
@@ -97,7 +97,7 @@ const mmapCanvas=document.getElementById('minimap');
 const mmapCtx=mmapCanvas.getContext('2d');
 
 const CELL=4.5,WALL_H=2.8,WALL_THICK=0.25,MW=16,MH=16;
-const MOVE_SPD=3.8,RUN_SPD=7,M_SENS=0.002;
+const MOVE_SPD=3.8,RUN_SPD=5.7,M_SENS=0.002;
 
 // ─── Maze (with big rooms, L/T shapes, long corridors) ───
 function genMaze(w,h){
@@ -331,7 +331,9 @@ function buildScene(){
 
 // ─── Entity ───
 function spawnEntity(){
-  let ex,ez;for(let i=0;i<50;i++){ex=Math.floor(Math.random()*MW)*CELL+CELL/2;ez=Math.floor(Math.random()*MH)*CELL+CELL/2;if(Math.hypot(ex-playerPos.x,ez-playerPos.z)>CELL*10)break}
+  // Spawn at map's far corner from player
+  let ex=(MW-1)*CELL+CELL/2, ez=(MH-1)*CELL+CELL/2;
+  if(Math.hypot(ex-playerPos.x,ez-playerPos.z)<CELL*5){ex=CELL/2;ez=(MH-1)*CELL+CELL/2}
   const group=new THREE.Group();const bMat=new THREE.MeshStandardMaterial({color:0x080808,roughness:1});
   const torso=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.05,1.3,6),bMat);torso.position.y=1.0;group.add(torso);
   const head=new THREE.Group();head.position.y=1.85;
@@ -347,7 +349,8 @@ function spawnEntity(){
   const lL=new THREE.Mesh(legGeo,bMat);lL.position.set(-0.06,0.35,0);group.add(lL);
   const rL=new THREE.Mesh(legGeo,bMat);rL.position.set(0.06,0.38,0);group.add(rL);
   group.position.set(ex,0,ez);scene.add(group);
-  entities.push({group,head,lArm,rArm,x:ex,z:ez,speed:1.4+Math.random()*0.5,pathTimer:0,target:null});
+  const patrolDir=Math.random()*Math.PI*2;
+  entities.push({group,head,lArm,rArm,x:ex,z:ez,speed:1.4+Math.random()*0.5,pathTimer:0,target:null,state:'patrol',facing:patrolDir,patrolTimer:0});
 }
 
 // ─── Collision (all 4 walls, thickness-aware) ───
@@ -364,14 +367,35 @@ function canMove(nx,nz,r){
   if(nx-r<0||nx+r>MW*CELL||nz-r<0||nz+r>MH*CELL)return false;return true;
 }
 
-// ─── Entity AI (BFS) ───
+// ─── Entity AI (patrol + 30° vision cone chase) ───
 function moveEnt(e,dt){
   const dist=Math.hypot(playerPos.x-e.x,playerPos.z-e.z);if(dist<0.4){dead=true;return}
-  e.pathTimer-=dt;if(e.pathTimer<=0||!e.target){e.pathTimer=0.4;e.target=bfsNext(e.x,e.z,playerPos.x,playerPos.z)||{x:playerPos.x,z:playerPos.z}}
-  const dx=e.target.x-e.x,dz=e.target.z-e.z,d=Math.hypot(dx,dz);if(d<0.2){e.pathTimer=0;return}
-  const a=Math.atan2(dz,dx),s=e.speed*dt;let nx=e.x+Math.cos(a)*s,nz=e.z+Math.sin(a)*s;
-  if(canMove(nx,nz,0.18)){e.x=nx;e.z=nz}else if(canMove(nx,e.z,0.18))e.x=nx;else if(canMove(e.x,nz,0.18))e.z=nz;
-  e.group.position.set(e.x,0,e.z);e.group.rotation.y=Math.atan2(-(playerPos.x-e.x),-(playerPos.z-e.z));
+  // Vision check: 30° cone in front, max 12 cells range
+  const toPlayerX=playerPos.x-e.x, toPlayerZ=playerPos.z-e.z;
+  const angleToPlayer=Math.atan2(toPlayerZ,toPlayerX);
+  let angleDiff=angleToPlayer-e.facing;
+  while(angleDiff>Math.PI)angleDiff-=Math.PI*2;while(angleDiff<-Math.PI)angleDiff+=Math.PI*2;
+  const canSee=Math.abs(angleDiff)<(15*Math.PI/180)&&dist<CELL*12;
+  
+  if(canSee||e.state==='chase'){
+    e.state='chase';
+    // Chase with BFS
+    e.pathTimer-=dt;if(e.pathTimer<=0||!e.target){e.pathTimer=0.4;e.target=bfsNext(e.x,e.z,playerPos.x,playerPos.z)||{x:playerPos.x,z:playerPos.z}}
+    const dx=e.target.x-e.x,dz=e.target.z-e.z,d=Math.hypot(dx,dz);if(d<0.2){e.pathTimer=0;return}
+    const a=Math.atan2(dz,dx),s=e.speed*1.3*dt;let nx=e.x+Math.cos(a)*s,nz=e.z+Math.sin(a)*s;
+    e.facing=a;
+    // Lose player if too far and can't see
+    if(dist>CELL*15)e.state='patrol';
+    if(canMove(nx,nz,0.15)){e.x=nx;e.z=nz}else{e.pathTimer=0}
+  } else {
+    // Patrol: walk in current facing direction, change direction when hitting wall or periodically
+    e.patrolTimer-=dt;
+    if(e.patrolTimer<=0){e.facing+=((Math.random()-0.5)*Math.PI);e.patrolTimer=2+Math.random()*4}
+    const s=e.speed*0.5*dt;
+    const nx=e.x+Math.cos(e.facing)*s, nz=e.z+Math.sin(e.facing)*s;
+    if(canMove(nx,nz,0.15)){e.x=nx;e.z=nz}else{e.facing=Math.random()*Math.PI*2;e.patrolTimer=1}
+  }
+  e.group.position.set(e.x,0,e.z);e.group.rotation.y=-e.facing+Math.PI/2;
   const t=gameTime;e.head.rotation.z=Math.sin(t*2.5+e.speed)*0.18;e.head.rotation.x=Math.sin(t*1.8)*0.12+0.05;
   e.lArm.rotation.z=0.9+Math.sin(t*3.5)*0.25;e.rArm.rotation.z=-0.5+Math.sin(t*2.2)*0.18;
   e.group.position.y=Math.sin(t*4)*0.015;e.group.rotation.x=Math.sin(t*1.5)*0.03;e.group.rotation.z=Math.sin(t*2)*0.02;
