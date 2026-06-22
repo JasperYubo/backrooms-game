@@ -13,7 +13,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{overflow:hidden;background:#000;font-family:'Courier New',monospace;touch-action:none;user-select:none}
 canvas{display:block;position:fixed;top:0;left:0}
-#minimap{position:fixed;top:10px;right:10px;z-index:15;border:1px solid rgba(201,180,88,.3);border-radius:4px;opacity:0.85;display:none}
+#minimap{position:fixed;top:10px;right:10px;z-index:15;border:2px solid rgba(201,180,88,.3);border-radius:50%;opacity:0.85;display:none;box-shadow:0 0 10px rgba(0,0,0,.5)}
 #minimap.show{display:block}
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;color:#c9b458;transition:opacity .8s}
 #overlay.hidden{opacity:0;pointer-events:none}
@@ -182,12 +182,19 @@ function drawMinimap(){
   // Entities (red dots, only if in visited area)
   mmapCtx.fillStyle='#ff2200';
   for(const e of entities){const ex=Math.floor(e.x/CELL),ez=Math.floor(e.z/CELL);if(ex>=0&&ex<MW&&ez>=0&&ez<MH&&visited[ez][ex]){const mx=e.x/CELL*cs,mz=e.z/CELL*cs;mmapCtx.beginPath();mmapCtx.arc(mx,mz,2.5,0,Math.PI*2);mmapCtx.fill()}}
-  // Exit (yellow, only if visited)
-  if(visited[MH-1][MW-1]){const ex2=(MW-1)*cs+cs/2,ez2=(MH-1)*cs+cs/2;mmapCtx.fillStyle='#c9b458';mmapCtx.fillRect(ex2-3,ez2-3,6,6)}
+  // Exit (yellow, only if in visited area near exit)
+  const exitCX=Math.floor(exitPos.x/CELL),exitCZ=Math.floor(exitPos.z/CELL);
+  if(exitCX>=0&&exitCX<MW&&exitCZ>=0&&exitCZ<MH&&visited[exitCZ][exitCX]){const ex2=exitPos.x/CELL*cs,ez2=exitPos.z/CELL*cs;mmapCtx.fillStyle='#c9b458';mmapCtx.fillRect(ex2-3,ez2-3,6,6)}
   // Player (green)
   const px2=playerPos.x/CELL*cs,pz=playerPos.z/CELL*cs;
   mmapCtx.fillStyle='#44ff44';mmapCtx.beginPath();mmapCtx.arc(px2,pz,3,0,Math.PI*2);mmapCtx.fill();
   mmapCtx.strokeStyle='#44ff44';mmapCtx.lineWidth=1.5;mmapCtx.beginPath();mmapCtx.moveTo(px2,pz);mmapCtx.lineTo(px2+Math.sin(yaw)*8,pz+Math.cos(yaw)*8);mmapCtx.stroke();
+  // Radar sweep line
+  const sweep=gameTime*1.2%(Math.PI*2);
+  mmapCtx.strokeStyle='rgba(201,180,88,0.25)';mmapCtx.lineWidth=1;mmapCtx.beginPath();mmapCtx.moveTo(px2,pz);mmapCtx.lineTo(px2+Math.sin(sweep)*S*0.6,pz+Math.cos(sweep)*S*0.6);mmapCtx.stroke();
+  // Radar circle outline
+  mmapCtx.strokeStyle='rgba(201,180,88,0.2)';mmapCtx.lineWidth=0.5;mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/2-2,0,Math.PI*2);mmapCtx.stroke();
+  mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/4,0,Math.PI*2);mmapCtx.stroke();
 }
 
 // ─── Textures ───
@@ -278,13 +285,23 @@ function buildScene(){
     const pl=new THREE.PointLight(lightColor,baseI,CELL*4,1.5);pl.position.set(lx,WALL_H-0.08,lz);scene.add(pl);
     flickerLights.push({light:pl,tube,base:baseI,rate:flickRate,broken:isBroken});
   }
-  // Exit: door + EXIT sign
-  exitPos={x:(MW-1)*CELL+CELL/2,z:(MH-1)*CELL+CELL/2};
-  const doorMat=new THREE.MeshStandardMaterial({color:0x2a2015,roughness:0.8});
-  const door=new THREE.Mesh(new THREE.BoxGeometry(1.0,2.2,0.1),doorMat);door.position.set(exitPos.x,1.1,exitPos.z);scene.add(door);
-  const signMat=new THREE.MeshBasicMaterial({color:0x886644});
-  const sign=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.15,0.03),signMat);sign.position.set(exitPos.x,2.4,exitPos.z);scene.add(sign);
-  const exitLight=new THREE.PointLight(0xffe8c0,0.6,3,2);exitLight.position.set(exitPos.x,WALL_H-0.1,exitPos.z);scene.add(exitLight);
+  // Exit: embedded dark panel in random wall (MC ant-block style)
+  // Pick random wall cell that has a wall, embed exit there
+  const exitCells=[];
+  for(let y=2;y<MH-2;y++)for(let x=2;x<MW-2;x++){
+    if(maze[y][x].n)exitCells.push({x,y,dir:'n'});
+    if(maze[y][x].w)exitCells.push({x,y,dir:'w'});
+  }
+  const exitCell=exitCells[Math.floor(Math.random()*exitCells.length)];
+  let ex,ez,eRotY;
+  if(exitCell.dir==='n'){ex=exitCell.x*CELL+CELL/2;ez=exitCell.y*CELL;eRotY=0;}
+  else{ex=exitCell.x*CELL;ez=exitCell.y*CELL+CELL/2;eRotY=Math.PI/2;}
+  exitPos={x:ex,z:ez};
+  // Dark panel embedded in wall - subtle color difference from wallpaper
+  const exitMat=new THREE.MeshStandardMaterial({color:0x1a1510,roughness:0.95,metalness:0.05});
+  const exitPanel=new THREE.Mesh(new THREE.BoxGeometry(0.9,2.0,0.06),exitMat);
+  exitPanel.position.set(ex,1.0,ez);exitPanel.rotation.y=eRotY;scene.add(exitPanel);
+  // No sign, no obvious light - just a slightly off-color panel
   // Wall corner shadow strips (AO fake)
   const shadowMat=new THREE.MeshBasicMaterial({color:0x0a0804,transparent:true,opacity:0.25});
   const shGeoH=new THREE.BoxGeometry(CELL,0.4,0.06);
@@ -374,7 +391,7 @@ function step(){try{const a=ac(),b=a.createBufferSource(),buf=a.createBuffer(1,a
 function entSnd(){try{const a=ac(),o=a.createOscillator(),g=a.createGain();o.type='sawtooth';o.frequency.value=28+Math.random()*12;g.gain.setValueAtTime(0.04,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.4);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+0.4)}catch(e){}}
 
 // ─── Post Processing ───
-function setupPost(){composer=new THREE.EffectComposer(renderer);composer.addPass(new THREE.RenderPass(scene,camera));composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.12,0.2,0.96))}
+function setupPost(){composer=new THREE.EffectComposer(renderer);composer.addPass(new THREE.RenderPass(scene,camera));composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.15,0.2,0.96))}
 
 // ─── Touch ───
 function initJoy(){
@@ -423,7 +440,24 @@ function update(dt){
   if(near){sanity=Math.max(0,sanity-5*dt);scene.fog.density=0.05+0.03*(1-sanity/30);camera.rotation.z=Math.sin(gameTime*2.5)*0.012*(1-sanity/50)}
   else{sanity=Math.min(100,sanity+1.5*dt);scene.fog.density=0.05;camera.rotation.z=0}
   document.getElementById('sf').style.width=sanity+'%';
-  if(Math.hypot(playerPos.x-exitPos.x,playerPos.z-exitPos.z)<1.2){won=true;showMsg("逃出来了……");setTimeout(()=>{document.getElementById('overlay').classList.remove('hidden');document.getElementById('overlay').innerHTML='<h1>逃离</h1><div class="sub">'+fmt(gameTime)+'</div><p style="color:#444;margin-top:14px">后室还有无数层</p><button onclick="location.reload()">再来</button>'},1500)}
+  if(Math.hypot(playerPos.x-exitPos.x,playerPos.z-exitPos.z)<1.2&&!won){won=true;
+    // TV static effect + white noise
+    const staticCanvas=document.createElement('canvas');staticCanvas.style.cssText='position:fixed;inset:0;z-index:300;width:100%;height:100%';
+    staticCanvas.width=320;staticCanvas.height=240;document.body.appendChild(staticCanvas);
+    const sctx=staticCanvas.getContext('2d');
+    // White noise audio
+    try{const a=ac(),bufSize=a.sampleRate*2,buf=a.createBuffer(1,bufSize,a.sampleRate),data=buf.getChannelData(0);
+    for(let i=0;i<bufSize;i++)data[i]=(Math.random()*2-1)*0.3;
+    const noise=a.createBufferSource();noise.buffer=buf;noise.loop=true;noise.connect(a.destination);noise.start();}catch(e){}
+    // Animate static
+    let staticFrames=0;
+    function drawStatic(){if(staticFrames>90){staticCanvas.remove();
+      document.getElementById('overlay').classList.remove('hidden');
+      document.getElementById('overlay').innerHTML='<h1>逃离</h1><div class="sub">'+fmt(gameTime)+'</div><p style="color:#444;margin-top:14px">后室还有无数层</p><button onclick="location.reload()">再来</button>';return;}
+      const imgData=sctx.createImageData(320,240);
+      for(let i=0;i<imgData.data.length;i+=4){const v=Math.random()*255;imgData.data[i]=v;imgData.data[i+1]=v;imgData.data[i+2]=v;imgData.data[i+3]=255;}
+      sctx.putImageData(imgData,0,0);staticFrames++;requestAnimationFrame(drawStatic);}
+    drawStatic();}
   document.getElementById('tm').textContent=fmt(gameTime);
   if(dead){document.getElementById('death').style.display='flex';document.getElementById('hud').classList.remove('show')}
   // Minimap update
@@ -437,7 +471,7 @@ function init3D(){
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,60);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
   renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.3;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
   renderer.shadowMap.enabled=false;
   renderer.outputEncoding=THREE.sRGBEncoding;
   clock=new THREE.Clock();buildScene();setupPost();
