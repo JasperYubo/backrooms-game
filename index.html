@@ -166,38 +166,42 @@ function drawMinimap(){
   if(pcx>=0&&pcx<MW&&pcz>=0&&pcz<MH)visited[pcz][pcx]=true;
   // Also reveal adjacent cells
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=pcx+dx,nz=pcz+dy;if(nx>=0&&nx<MW&&nz>=0&&nz<MH)visited[nz][nx]=true}
-  const S=140,cs=S/MW;
+  const S=140,R=S/2;
+  const viewRange=6; // cells visible in each direction from player
+  const cs=S/(viewRange*2); // cell size on minimap
   mmapCtx.save();
-  mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/2,0,Math.PI*2);mmapCtx.clip();
+  mmapCtx.beginPath();mmapCtx.arc(R,R,R,0,Math.PI*2);mmapCtx.clip();
   mmapCtx.fillStyle='rgba(0,0,0,0.9)';mmapCtx.fillRect(0,0,S,S);
   mmapCtx.strokeStyle='rgba(201,180,88,0.35)';mmapCtx.lineWidth=1;
+  // Draw walls relative to player position (player at center)
+  const ox=playerPos.x/CELL, oz=playerPos.z/CELL; // player in cell coords (float)
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
-    if(!visited[y][x])continue; // fog of war
+    if(!visited[y][x])continue;
+    const sx=(x-ox)*cs+R, sy=(y-oz)*cs+R;
+    if(sx<-cs*2||sx>S+cs*2||sy<-cs*2||sy>S+cs*2)continue; // off screen
     const c=maze[y][x];
-    if(c.n){mmapCtx.beginPath();mmapCtx.moveTo(x*cs,y*cs);mmapCtx.lineTo((x+1)*cs,y*cs);mmapCtx.stroke()}
-    if(c.w){mmapCtx.beginPath();mmapCtx.moveTo(x*cs,y*cs);mmapCtx.lineTo(x*cs,(y+1)*cs);mmapCtx.stroke()}
-    if(c.s){mmapCtx.beginPath();mmapCtx.moveTo(x*cs,(y+1)*cs);mmapCtx.lineTo((x+1)*cs,(y+1)*cs);mmapCtx.stroke()}
-    if(c.e){mmapCtx.beginPath();mmapCtx.moveTo((x+1)*cs,y*cs);mmapCtx.lineTo((x+1)*cs,(y+1)*cs);mmapCtx.stroke()}
-    // Floor tint for visited
-    mmapCtx.fillStyle='rgba(201,180,88,0.04)';mmapCtx.fillRect(x*cs,y*cs,cs,cs);
+    if(c.n){mmapCtx.beginPath();mmapCtx.moveTo(sx,sy);mmapCtx.lineTo(sx+cs,sy);mmapCtx.stroke()}
+    if(c.w){mmapCtx.beginPath();mmapCtx.moveTo(sx,sy);mmapCtx.lineTo(sx,sy+cs);mmapCtx.stroke()}
+    if(c.s){mmapCtx.beginPath();mmapCtx.moveTo(sx,sy+cs);mmapCtx.lineTo(sx+cs,sy+cs);mmapCtx.stroke()}
+    if(c.e){mmapCtx.beginPath();mmapCtx.moveTo(sx+cs,sy);mmapCtx.lineTo(sx+cs,sy+cs);mmapCtx.stroke()}
+    mmapCtx.fillStyle='rgba(201,180,88,0.04)';mmapCtx.fillRect(sx,sy,cs,cs);
   }
-  // Entities (red dots, only if in visited area)
+  // Entities (red dots)
   mmapCtx.fillStyle='#ff2200';
-  for(const e of entities){const ex=Math.floor(e.x/CELL),ez=Math.floor(e.z/CELL);if(ex>=0&&ex<MW&&ez>=0&&ez<MH&&visited[ez][ex]){const mx=e.x/CELL*cs,mz=e.z/CELL*cs;mmapCtx.beginPath();mmapCtx.arc(mx,mz,2.5,0,Math.PI*2);mmapCtx.fill()}}
-  // Exit (yellow, only if in visited area near exit)
+  for(const e of entities){const ex=Math.floor(e.x/CELL),ez=Math.floor(e.z/CELL);if(ex>=0&&ex<MW&&ez>=0&&ez<MH&&visited[ez][ex]){const mx=(e.x/CELL-ox)*cs+R,mz=(e.z/CELL-oz)*cs+R;mmapCtx.beginPath();mmapCtx.arc(mx,mz,2.5,0,Math.PI*2);mmapCtx.fill()}}
+  // Exit (yellow)
   const exitCX=Math.floor(exitPos.x/CELL),exitCZ=Math.floor(exitPos.z/CELL);
-  if(exitCX>=0&&exitCX<MW&&exitCZ>=0&&exitCZ<MH&&visited[exitCZ][exitCX]){const ex2=exitPos.x/CELL*cs,ez2=exitPos.z/CELL*cs;mmapCtx.fillStyle='#c9b458';mmapCtx.fillRect(ex2-3,ez2-3,6,6)}
-  // Player (green)
-  const px2=playerPos.x/CELL*cs,pz=playerPos.z/CELL*cs;
-  mmapCtx.fillStyle='#44ff44';mmapCtx.beginPath();mmapCtx.arc(px2,pz,3,0,Math.PI*2);mmapCtx.fill();
-  mmapCtx.strokeStyle='#44ff44';mmapCtx.lineWidth=1.5;mmapCtx.beginPath();mmapCtx.moveTo(px2,pz);mmapCtx.lineTo(px2+Math.sin(yaw)*8,pz+Math.cos(yaw)*8);mmapCtx.stroke();
+  if(exitCX>=0&&exitCX<MW&&exitCZ>=0&&exitCZ<MH&&visited[exitCZ][exitCX]){const ex2=(exitPos.x/CELL-ox)*cs+R,ez2=(exitPos.z/CELL-oz)*cs+R;mmapCtx.fillStyle='#c9b458';mmapCtx.fillRect(ex2-3,ez2-3,6,6)}
+  // Player (always at center, green dot + direction line)
+  mmapCtx.fillStyle='#44ff44';mmapCtx.beginPath();mmapCtx.arc(R,R,3,0,Math.PI*2);mmapCtx.fill();
+  mmapCtx.strokeStyle='#44ff44';mmapCtx.lineWidth=1.5;mmapCtx.beginPath();mmapCtx.moveTo(R,R);mmapCtx.lineTo(R+Math.sin(yaw)*10,R+Math.cos(yaw)*10);mmapCtx.stroke();
   // Radar sweep line
   const sweep=gameTime*1.2%(Math.PI*2);
-  mmapCtx.strokeStyle='rgba(201,180,88,0.25)';mmapCtx.lineWidth=1;mmapCtx.beginPath();mmapCtx.moveTo(px2,pz);mmapCtx.lineTo(px2+Math.sin(sweep)*S*0.6,pz+Math.cos(sweep)*S*0.6);mmapCtx.stroke();
-  // Radar circle outline
+  mmapCtx.strokeStyle='rgba(201,180,88,0.25)';mmapCtx.lineWidth=1;mmapCtx.beginPath();mmapCtx.moveTo(R,R);mmapCtx.lineTo(R+Math.sin(sweep)*R*0.9,R+Math.cos(sweep)*R*0.9);mmapCtx.stroke();
+  // Radar circles
   mmapCtx.restore();
-  mmapCtx.strokeStyle='rgba(201,180,88,0.2)';mmapCtx.lineWidth=0.5;mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/2-2,0,Math.PI*2);mmapCtx.stroke();
-  mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/4,0,Math.PI*2);mmapCtx.stroke();
+  mmapCtx.strokeStyle='rgba(201,180,88,0.2)';mmapCtx.lineWidth=0.5;mmapCtx.beginPath();mmapCtx.arc(R,R,R-2,0,Math.PI*2);mmapCtx.stroke();
+  mmapCtx.beginPath();mmapCtx.arc(R,R,R/2,0,Math.PI*2);mmapCtx.stroke();
 }
 
 // ─── Textures ───
