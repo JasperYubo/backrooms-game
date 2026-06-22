@@ -167,6 +167,8 @@ function drawMinimap(){
   // Also reveal adjacent cells
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=pcx+dx,nz=pcz+dy;if(nx>=0&&nx<MW&&nz>=0&&nz<MH)visited[nz][nx]=true}
   const S=140,cs=S/MW;
+  mmapCtx.save();
+  mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/2,0,Math.PI*2);mmapCtx.clip();
   mmapCtx.fillStyle='rgba(0,0,0,0.9)';mmapCtx.fillRect(0,0,S,S);
   mmapCtx.strokeStyle='rgba(201,180,88,0.35)';mmapCtx.lineWidth=1;
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
@@ -193,6 +195,7 @@ function drawMinimap(){
   const sweep=gameTime*1.2%(Math.PI*2);
   mmapCtx.strokeStyle='rgba(201,180,88,0.25)';mmapCtx.lineWidth=1;mmapCtx.beginPath();mmapCtx.moveTo(px2,pz);mmapCtx.lineTo(px2+Math.sin(sweep)*S*0.6,pz+Math.cos(sweep)*S*0.6);mmapCtx.stroke();
   // Radar circle outline
+  mmapCtx.restore();
   mmapCtx.strokeStyle='rgba(201,180,88,0.2)';mmapCtx.lineWidth=0.5;mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/2-2,0,Math.PI*2);mmapCtx.stroke();
   mmapCtx.beginPath();mmapCtx.arc(S/2,S/2,S/4,0,Math.PI*2);mmapCtx.stroke();
 }
